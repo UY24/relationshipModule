@@ -4,8 +4,6 @@ import { render as renderCompanies } from "./companies.js";
 import { render as renderNewRun } from "./new_run.js";
 import { render as renderRuns } from "./runs.js";
 import { render as renderRunDetail } from "./run_detail.js";
-import { render as renderOperations } from "./operations.js";
-import { render as renderTools } from "./tools.js";
 
 const TITLES = {
   dashboard: "Dashboard",
@@ -13,8 +11,6 @@ const TITLES = {
   "new-run": "New Run",
   runs: "Runs",
   "run-detail": "Run Detail",
-  operations: "Operations",
-  tools: "Tools",
 };
 
 const VIEWS = {
@@ -23,8 +19,6 @@ const VIEWS = {
   "new-run": renderNewRun,
   runs: renderRuns,
   "run-detail": renderRunDetail,
-  operations: renderOperations,
-  tools: renderTools,
 };
 
 const NAV_ICON_PATHS = {
@@ -32,8 +26,6 @@ const NAV_ICON_PATHS = {
   companies: ["M4 20V8l8-4v16", "M12 10h8v10", "M8 9v1", "M8 13v1", "M8 17v1", "M16 13v1", "M16 17v1"],
   "new-run": ["M12 3a9 9 0 1 0 9 9", "M12 7v10", "M7 12h10"],
   runs: ["M4 12a8 8 0 1 0 2.34-5.66L4 8", "M4 4v4h4", "M12 8v5l3 2"],
-  operations: ["M4 6h10", "M18 6h2", "M4 12h2", "M10 12h10", "M4 18h7", "M15 18h5", "M14 4v4", "M6 10v4", "M11 16v4"],
-  tools: ["M14.7 6.3a4 4 0 0 0-5-5L12 4 9 7 6.3 4.3a4 4 0 0 0 5 5L19 17a1.4 1.4 0 0 1-2 2l-7.7-7.7"],
 };
 
 function mountNavIcons() {

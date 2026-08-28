@@ -1,8 +1,8 @@
 # backend/app/core/s3.py
 """Shared S3 helpers — bucket from S3_BUCKET, region from S3_REGION.
 
-Used by AI Mode to mirror a completed run directory to S3. SerpWow keeps its own
-client (see services/serpwow/engine.py); this module is intentionally small.
+Used by AI Mode to mirror a completed run directory to S3, and by the
+client (see app/engine.py); this module is intentionally small.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _get_int_env(name: str, default: int) -> int:
 
 
 def get_s3_client():
-    """Lazy boto3 S3 client; region + timeout knobs mirror the SerpWow client."""
+    """Lazy boto3 S3 client, with region + timeout knobs from the environment."""
     global _client
     if _client is None:
         region = os.getenv("S3_REGION") or "ap-south-1"

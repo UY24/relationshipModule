@@ -145,7 +145,7 @@ class FormatterTests(unittest.TestCase):
 
 class PipelineLabelTests(unittest.TestCase):
     def test_known_keys_mapped(self):
-        self.assertEqual(notify.pipeline_label("gmaps"), "Google Maps")
+        self.assertEqual(notify.pipeline_label("relationship"), "Financial Relationship")
         self.assertEqual(notify.pipeline_label("ai_bulk"), "Google AI (Bulk)")
 
     def test_unknown_key_passthrough(self):

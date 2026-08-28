@@ -17,10 +17,9 @@ import os
 # mock.patch.dict(os.environ, {...}, clear=True).
 for _key in (
     "SLACK_WEBHOOK_URL", "S3_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
-    "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY", "SERPWOW_API_KEY",
-    # AI Mode's scraper, the gmaps pipeline's Google Maps client, and (since the 2026-08
-    # migration) the relationship pipeline's AI Mode client all read this — without it a
-    # row-path test could hit live scrape.do.
+    "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY",
+    # Both AI Mode's scraper and the relationship pipeline's AI Mode client read this —
+    # without it a row-path test could hit live scrape.do.
     "SCRAPEDO_TOKEN",
 ):
     os.environ[_key] = ""

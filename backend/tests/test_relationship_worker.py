@@ -8,8 +8,8 @@ import asyncio
 import unittest
 from unittest import mock
 
-from app.services.serpwow import engine as app_engine
-from app.services.serpwow import worker
+from app import engine as app_engine
+from app.services.relationship import worker
 
 
 class RelationshipWorkerWiringTests(unittest.TestCase):
@@ -41,9 +41,9 @@ class RelationshipWorkerWiringTests(unittest.TestCase):
         async def run():
             with mock.patch.object(app_engine, "rabbitmq_connection", BoomConnection()), \
                     mock.patch(
-                        "app.services.serpwow.relationship_runner.redrive_stale_runs",
+                        "app.services.relationship.relationship_runner.redrive_stale_runs",
                         new=mock.AsyncMock(return_value=0)):
-                from app.services.serpwow import relationship_runner
+                from app.services.relationship import relationship_runner
                 with self.assertRaises(RuntimeError):
                     await worker._start_s3_run_worker(
                         "relationship",
@@ -67,10 +67,9 @@ class RelationshipWorkerWiringTests(unittest.TestCase):
         # M4: still alive despite the channel setup having raised.
         self.assertFalse(results["done"])
 
-    def test_every_s3_only_pipeline_gets_a_consumer_and_a_redrive_loop(self) -> None:
-        """gmaps joined relationship on the run-per-message model in 2026-08, and
-        firmographics in 2026-08-20. Missing any one of them leaves that pipeline's uploads
-        sitting in a queue nobody reads, with no re-drive scan to rescue them either."""
+    def test_the_run_consumer_and_its_redrive_loop_both_start(self) -> None:
+        """Missing either one leaves relationship uploads sitting in a queue nobody reads,
+        with no re-drive scan to rescue them either."""
         started: list[str] = []
 
         class FakeChannel:
@@ -82,31 +81,17 @@ class RelationshipWorkerWiringTests(unittest.TestCase):
         async def run():
             with mock.patch.object(app_engine, "rabbitmq_connection", FakeConnection()), \
                     mock.patch(
-                        "app.services.serpwow.relationship_runner.consume_relationship_runs",
+                        "app.services.relationship.relationship_runner.consume_relationship_runs",
                         new=mock.AsyncMock(side_effect=lambda ch: started.append("relationship"))), \
                     mock.patch(
-                        "app.services.serpwow.gmaps_runner.consume_gmaps_runs",
-                        new=mock.AsyncMock(side_effect=lambda ch: started.append("gmaps"))), \
-                    mock.patch(
-                        "app.services.serpwow.relationship_runner.redrive_stale_runs",
-                        new=mock.AsyncMock(return_value=0)), \
-                    mock.patch(
-                        "app.services.serpwow.gmaps_runner.redrive_stale_runs",
-                        new=mock.AsyncMock(return_value=0)), \
-                    mock.patch(
-                        "app.services.serpwow.firmographics_runner"
-                        ".consume_firmographics_runs",
-                        new=mock.AsyncMock(
-                            side_effect=lambda ch: started.append("firmographics"))), \
-                    mock.patch(
-                        "app.services.serpwow.firmographics_runner.redrive_stale_runs",
+                        "app.services.relationship.relationship_runner.redrive_stale_runs",
                         new=mock.AsyncMock(return_value=0)):
                 await worker._start_run_workers()
                 return len(app_engine.rabbitmq_consumer_tasks)
 
         redrive_loops = asyncio.run(run())
-        self.assertEqual(sorted(started), ["firmographics", "gmaps", "relationship"])
-        self.assertEqual(redrive_loops, 3)
+        self.assertEqual(started, ["relationship"])
+        self.assertEqual(redrive_loops, 1)
 
 
 if __name__ == "__main__":

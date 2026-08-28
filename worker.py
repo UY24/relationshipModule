@@ -1,4 +1,7 @@
-"""Run the SerpWow RabbitMQ worker from the repo root.
+"""Run the RabbitMQ worker from the repo root.
+
+Consumes both queues: `relationship_runs` (one message per run) and `ai_mode_jobs`
+(one message per scrape batch). Run exactly ONE of these processes.
 
 Command:
   python worker.py
@@ -12,7 +15,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 os.chdir(BACKEND)
 
-from app.services.serpwow.worker import main  # noqa: E402
+from app.services.relationship.worker import main  # noqa: E402
 
 
 if __name__ == "__main__":

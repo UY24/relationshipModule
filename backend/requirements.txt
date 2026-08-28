@@ -1,13 +1,8 @@
 fastapi
 uvicorn[standard]
 python-multipart
-jinja2
 boto3
-pika
 aio-pika
 python-dotenv
-pyyaml
-duckdb
 httpx
-msgspec
 supabase
