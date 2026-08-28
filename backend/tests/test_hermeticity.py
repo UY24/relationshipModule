@@ -6,7 +6,7 @@ class TestHermeticity(unittest.TestCase):
     def test_cloud_env_blanked(self):
         for key in (
             "SLACK_WEBHOOK_URL", "S3_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
-            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY",
+            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY", "SERPWOW_API_KEY",
         ):
             self.assertEqual(os.environ.get(key, ""), "", f"{key} must be blank in tests")
 

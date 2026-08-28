@@ -11,7 +11,7 @@ first publish until terminal). Counters are a cache — the Phase 1 -> 2 barrier
 always recounts the directory before flipping to "cleaning" and dispatching
 run_ai_mode_finish (registry-guarded so exactly one finish task runs per run).
 
-Ack policy: ack only AFTER the raw/error file is
+Ack policy mirrors the SerpWow consumer: ack only AFTER the raw/error file is
 durably on disk; a scrape.do API failure is a RESULT (error marker + ack), while
 infrastructure crashes get one redelivery and are then terminalized with an
 error marker so the barrier still resolves (no wedged runs).
@@ -46,7 +46,7 @@ from app.services.ai_mode.models import utc_now_iso
 
 _LOG = logging.getLogger("ai_mode.worker")
 
-# Per-run coordination (single worker process — same constraint as the relationship
+# Per-run coordination (single worker process — same constraint as SerpWow's
 # gemini_batch_tasks registry).
 _run_locks: dict[str, asyncio.Lock] = {}
 _finish_tasks: dict[str, asyncio.Task] = {}
@@ -390,7 +390,7 @@ async def process_scrape_job(payload: dict[str, Any]) -> None:
         f"scrape batch {request_index} started started_at={started_at} "
         f"entities={len(group)}",
     )
-    # Account-wide scrape.do gate, shared with the relationship pipeline (both run in this
+    # Account-wide scrape.do gate, shared with the gmaps pipeline (both run in this
     # worker process against the same account, so two separate caps could sum past it).
     # Held across the to_thread call because that IS the HTTP request.
     async with scrapedo_slot():
@@ -410,7 +410,7 @@ async def process_scrape_job(payload: dict[str, Any]) -> None:
         logging.ERROR if not rec["ok"] else logging.INFO,
     )
     if not rec["ok"]:
-        # A scrape.do failure is a RESULT (shared outcome taxonomy): terminalize
+        # A scrape.do failure is a RESULT (SerpWow-parity taxonomy): terminalize
         # durably so the barrier can resolve; Phase 3 emits error rows for it.
         await asyncio.to_thread(
             write_error_marker, run_dir, mode.key, request_index,
@@ -670,12 +670,12 @@ async def _reconcile_scrape_run(
 
 
 async def reconcile_ai_mode_runs() -> dict:
-    """Sweep non-terminal AI Mode runs and self-heal.
+    """Sweep non-terminal AI Mode runs and self-heal (SerpWow-reconciler parity).
 
     1. broker runs stuck publishing/scraping with lost batches: republish each
        missing batch up to AI_MODE_BATCH_MAX_REQUEUE times (safe — workers skip
        existing raw files), then terminalize via error markers so the barrier
-       ALWAYS resolves. Gated on a drained queue.
+       ALWAYS resolves. Gated on a drained queue, like reconcile_stuck_gsearch_rows.
     2. broker runs in phase "cleaning" with no live finish task (worker died
        mid-cleanup): re-dispatch run_ai_mode_finish (resumable via cleaned/).
     3. legacy sync-engine runs stuck queued/running past AI_MODE_LEGACY_STALE_SEC:
@@ -733,7 +733,7 @@ async def reconcile_ai_mode_runs() -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Consumer loops
+# Consumer loops (mirror of the SerpWow worker's ack/poison policy)
 # --------------------------------------------------------------------------- #
 async def _should_requeue_infra_failure(
     payload: dict[str, Any] | None, message: Any,

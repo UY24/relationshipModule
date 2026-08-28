@@ -6,9 +6,9 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app.services.relationship import s3_run_store as store
-from app import engine
-from app.engine import app
+from app.services.serpwow import s3_run_store as store
+from app.services.serpwow import engine
+from app.services.serpwow.engine import app
 from tests.test_s3_run_store import FakeS3, _patched
 
 GOOD_CSV = (b"Input_URL,Company_Name_X,Company_Name_Y\n"
@@ -26,12 +26,12 @@ class UploadValidationTests(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("SCRAPEDO_TOKEN", r.json()["detail"])
 
-    def test_only_gemini_and_scrapedo_keys_are_required(self) -> None:
-        """scrape.do and Gemini are the only providers this pipeline talks to."""
+    def test_serpwow_api_key_is_no_longer_required(self) -> None:
+        """The relationship pipeline no longer calls SerpWow at all."""
         fake = FakeS3()
-        with mock.patch.dict(os.environ, {**ENV, "SOME_UNRELATED_KEY": ""}, clear=False), \
+        with mock.patch.dict(os.environ, {**ENV, "SERPWOW_API_KEY": ""}, clear=False), \
                 _patched(fake), \
-                mock.patch("app.engine.publish_relationship_run",
+                mock.patch("app.services.serpwow.engine.publish_relationship_run",
                            new=mock.AsyncMock()):
             client = TestClient(app)
             r = client.post("/uploads/relationship",
@@ -65,7 +65,7 @@ class UploadSideEffectTests(unittest.TestCase):
         fake = FakeS3()
         published = mock.AsyncMock()
         with mock.patch.dict(os.environ, ENV, clear=False), _patched(fake), \
-                mock.patch("app.engine.publish_relationship_run",
+                mock.patch("app.services.serpwow.engine.publish_relationship_run",
                            new=published):
             client = TestClient(app)
             r = client.post("/uploads/relationship",
@@ -90,7 +90,7 @@ class UploadSideEffectTests(unittest.TestCase):
         with mock.patch.dict(os.environ, ENV, clear=False), _patched(fake), \
                 mock.patch("app.services.companies.get_company_service",
                            return_value=svc), \
-                mock.patch("app.engine.publish_relationship_run",
+                mock.patch("app.services.serpwow.engine.publish_relationship_run",
                            new=mock.AsyncMock()):
             r = TestClient(app).post(
                 "/uploads/relationship",
@@ -112,7 +112,7 @@ class UploadSideEffectTests(unittest.TestCase):
         exchange = mock.Mock()
         exchange.publish = mock.AsyncMock(side_effect=RuntimeError("channel closed"))
         with mock.patch.dict(os.environ, ENV, clear=False), _patched(fake), \
-                mock.patch("app.engine.rabbitmq_exchange", exchange):
+                mock.patch("app.services.serpwow.engine.rabbitmq_exchange", exchange):
             r = TestClient(app).post(
                 "/uploads/relationship",
                 files={"file": ("in.csv", GOOD_CSV, "text/csv")},
@@ -128,7 +128,7 @@ class UploadSideEffectTests(unittest.TestCase):
         """state.json is what this migration removed; its return would be a regression."""
         fake = FakeS3()
         with mock.patch.dict(os.environ, ENV, clear=False), _patched(fake), \
-                mock.patch("app.engine.publish_relationship_run",
+                mock.patch("app.services.serpwow.engine.publish_relationship_run",
                            new=mock.AsyncMock()):
             TestClient(app).post(
                 "/uploads/relationship",
@@ -154,7 +154,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(body["pipeline"], "relationship")
         self.assertEqual(body["total_rows"], 500000)
         self.assertEqual(body["status"], "processing")
-        self.assertEqual(body["run_summary"]["cost"]["scrapedo_credits"], 12340)
+        self.assertEqual(body["serpwow_summary"]["cost"]["scrapedo_credits"], 12340)
 
     def test_an_unknown_run_id_still_404s(self) -> None:
         fake = FakeS3()
@@ -163,7 +163,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
 
     def test_batch_mode_reads_On_while_a_run_is_still_in_progress(self) -> None:
-        """The UI's Batch chip is `run_summary.is_batch`. This pipeline has no per-row
+        """The UI's Batch chip is `serpwow_summary.is_batch`. This pipeline has no per-row
         LLM path — phase 2 is ALWAYS the Gemini Batch verdict pass — so an absent key made
         run_detail.js read undefined and render "Batch: Off", which was just wrong."""
         fake = FakeS3()
@@ -173,7 +173,7 @@ class StatusTests(unittest.TestCase):
                 "rows_total": 10, "rows_scraped": 10, "phase": "cleaning",
                 "updated_at": "2026-08-04T00:00:00Z"})
             r = TestClient(app).get("/uploads/run1/status")
-        self.assertTrue(r.json()["run_summary"]["is_batch"])
+        self.assertTrue(r.json()["serpwow_summary"]["is_batch"])
 
     def test_batch_mode_still_reads_On_from_a_terminal_report(self) -> None:
         """Same value from the other source, so the chip cannot flip when a run finishes."""
@@ -187,7 +187,7 @@ class StatusTests(unittest.TestCase):
                              {"summary": {"status": "completed", "is_batch": True,
                                           "total_rows": 10}})
             r = TestClient(app).get("/uploads/run1/status")
-        self.assertTrue(r.json()["run_summary"]["is_batch"])
+        self.assertTrue(r.json()["serpwow_summary"]["is_batch"])
 
     def test_terminal_status_comes_from_the_report_not_the_phase(self) -> None:
         """phase only ever reaches "completed"; write_outputs computes
@@ -237,8 +237,8 @@ class StatusTests(unittest.TestCase):
             partial = TestClient(app).get("/uploads/run5/status").json()
 
         self.assertEqual(failed["status"], "failed")
-        self.assertEqual(failed["run_summary"]["available_files"], [])
-        self.assertEqual(partial["run_summary"]["available_files"],
+        self.assertEqual(failed["serpwow_summary"]["available_files"], [])
+        self.assertEqual(partial["serpwow_summary"]["available_files"],
                          ["confirmed_relation.csv", "run.log"])
 
     def test_a_running_run_does_not_pay_for_the_file_probe(self) -> None:
@@ -254,7 +254,7 @@ class StatusTests(unittest.TestCase):
                                    wraps=fake.get_paginator) as paginator:
                 body = TestClient(app).get("/uploads/run6/status").json()
         self.assertEqual(body["status"], "processing")
-        self.assertEqual(body["run_summary"]["available_files"], [])
+        self.assertEqual(body["serpwow_summary"]["available_files"], [])
         self.assertEqual(paginator.call_count, 0)
 
     def test_a_terminal_run_pays_one_scoped_list_per_file(self) -> None:
@@ -292,7 +292,7 @@ class StatusTests(unittest.TestCase):
 
         self.assertEqual(body["status"], "processing")
         self.assertEqual(body["phase"], "scraping")
-        self.assertEqual(body["run_summary"]["available_files"], [])
+        self.assertEqual(body["serpwow_summary"]["available_files"], [])
 
 
 class FailureAnalysisTests(unittest.TestCase):
@@ -422,7 +422,7 @@ class FileStopAndRerunTests(unittest.TestCase):
             store.write_row(self.PREFIX, 4, {"ok": True})
             store.request_stop(self.PREFIX)
         with _patched(fake), mock.patch(
-                "app.engine.publish_relationship_run", new=published):
+                "app.services.serpwow.engine.publish_relationship_run", new=published):
             r = TestClient(app).post("/uploads/run2/retry-failed-rows")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["retried_rows"], 1)
@@ -442,7 +442,7 @@ class FileStopAndRerunTests(unittest.TestCase):
         with _patched(fake):
             store.put_object(store.error_key(self.PREFIX, 3), {"error": "boom"})
         with _patched(fake), mock.patch(
-                "app.engine.rabbitmq_exchange", exchange):
+                "app.services.serpwow.engine.rabbitmq_exchange", exchange):
             r = TestClient(app).post("/uploads/run2/retry-failed-rows")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["retried_rows"], 1)
@@ -457,7 +457,7 @@ PREVIEW_CSV = (
 
 class TestRelationshipPreviewEndpoint(unittest.TestCase):
     """The dry-run preview is unchanged by the scrape.do migration — it never
-    touched state.json or the queue."""
+    touched SerpWow, state.json or the queue."""
 
     def setUp(self):
         self.client = TestClient(app)

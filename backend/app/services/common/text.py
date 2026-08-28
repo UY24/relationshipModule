@@ -1,5 +1,5 @@
 # backend/app/services/common/text.py
-"""Text helpers shared across pipelines (AI Mode + relationship)."""
+"""Text helpers shared across pipelines (AI Mode + SerpWow)."""
 from __future__ import annotations
 
 import re
@@ -7,7 +7,7 @@ from typing import Any, Iterable, Mapping, Optional
 
 
 def slugify_company(value: str) -> str:
-    """Company folder slug shared by the relationship pipeline and AI Mode.
+    """Company folder slug shared by SerpWow and AI Mode.
 
     Lowercase, non-alphanumeric runs collapse to '-', trimmed. Guards ``None``.
     Used for the company SEGMENT of S3 keys + local run dirs so both pipelines

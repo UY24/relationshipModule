@@ -1,11 +1,7 @@
 import unittest
 
-from app.services.relationship.url_utils import (
-    canonicalize_official_url,
-    dedupe_candidate_urls,
-    url_matches_domain,
-    x_domain_from_input_url,
-)
+from app.services.serpwow.engine import canonicalize_official_url, dedupe_candidate_urls
+from app.services.serpwow.url_utils import url_matches_domain, x_domain_from_input_url
 
 
 class TestCanonicalize(unittest.TestCase):

@@ -222,7 +222,7 @@ async function labelsAndPlaceholderContract() {
     throw new Error(`Unexpected fetch: ${path}`);
   });
 
-  for (const id of ["new-run-company", "new-company-name", "new-run-csv"]) {
+  for (const id of ["new-run-company", "new-company-name", "new-run-phase", "new-run-csv"]) {
     assert(byAttribute(root, "id", id).length === 1, `${id} control missing`);
     assert(byAttribute(root, "for", id)[0]?.tagName === "LABEL", `${id} label association missing`);
   }
@@ -257,34 +257,32 @@ async function invalidRelationshipContract() {
   assert(root.textContent.includes(warning), "relationship preview warning disappeared");
 }
 
-async function relationshipPreviewEndpointContract() {
-  // A relationship CSV has no company_name/country, so the shared /uploads/preview
+async function firmographicsPreviewEndpointContract() {
+  // A firmographics CSV has no company_name/country, so the shared /uploads/preview
   // (parse_entities_csv) reported it as headerless and positional — "col 1 = company
-  // name, col 2 = country" about a file whose columns are X, Y and a URL.
+  // name, col 2 = country" about a file whose first column is a URL.
   const paths = [];
   const root = await renderWith(async (path) => {
     if (path === "/companies") return companiesResponse();
     paths.push(path);
-    if (path === "/uploads/relationship/preview") {
-      return response({ total_rows: 72, relationship: true, warnings: [],
-                        columns_detected: { Company_Name_Y: "Y" },
-                        sample_columns: ["company_name_x", "company_name_y", "input_url"],
-                        sample_rows: [] });
+    if (path === "/uploads/firmographics/preview") {
+      return response({ total_rows: 72, positional: false,
+                        columns_detected: { website_url: "Website" } });
     }
     throw new Error(`Unexpected fetch: ${path}`);
   });
 
   selectCompany(root);
-  await choosePipeline(root, "relationship");
-  await upload(root, new File(["Company_Name_X,Company_Name_Y,Input_URL\nA,B,https://a.com"],
-                              "rel.csv", { type: "text/csv" }));
+  await choosePipeline(root, "firmographics");
+  await upload(root, new File(["Website\nhttps://acme.com"], "firmo.csv",
+                              { type: "text/csv" }));
 
-  assert(paths.includes("/uploads/relationship/preview"),
-    "relationship did not use its own preview endpoint");
+  assert(paths.includes("/uploads/firmographics/preview"),
+    "firmographics did not use its own preview endpoint");
   assert(!paths.includes("/uploads/preview"),
-    "relationship still hit the entity-CSV preview");
+    "firmographics still hit the entity-CSV preview");
   assert(!root.textContent.includes("positional"),
-    "relationship preview still claims positional parsing");
+    "firmographics preview still claims positional parsing");
 }
 
 async function pipelineInvalidationContract() {
@@ -385,7 +383,7 @@ for (const [name, contract] of [
   ["initial accessibility", initialAccessibilityContract],
   ["labels and placeholder", labelsAndPlaceholderContract],
   ["invalid relationship", invalidRelationshipContract],
-  ["relationship preview endpoint", relationshipPreviewEndpointContract],
+  ["firmographics preview endpoint", firmographicsPreviewEndpointContract],
   ["pipeline invalidation", pipelineInvalidationContract],
   ["stale preview", stalePreviewContract],
   ["upload", uploadContract],

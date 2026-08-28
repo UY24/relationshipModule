@@ -101,9 +101,9 @@ class TestCompaniesRouter(unittest.TestCase):
         svc = mock.MagicMock()
         svc.list_runs.return_value = [{"id": "r1"}]
         with mock.patch("app.routers.companies.get_company_service", return_value=svc):
-            res = self.client.get("/companies/runs?company_id=u1&pipeline=relationship")
+            res = self.client.get("/companies/runs?company_id=u1&pipeline=gmaps")
         self.assertEqual(res.status_code, 200)
-        svc.list_runs.assert_called_once_with(company_id="u1", pipeline="relationship")
+        svc.list_runs.assert_called_once_with(company_id="u1", pipeline="gmaps")
 
 
 class TestAiModeUploadCompanyValidation(unittest.TestCase):
@@ -230,6 +230,241 @@ class TestBuildRunUpdate(unittest.TestCase):
         )
         self.assertEqual(update["status"], "completed_with_errors")
         self.assertIn("2 request(s) failed", update["error"])
+
+
+class TestLegacyUpdateSupabaseRun(unittest.TestCase):
+    def test_upload_file_links_use_s3_when_configured(self):
+        from app.services.serpwow import engine as legacy_app
+
+        with mock.patch.dict("os.environ", {"S3_BUCKET": "bucket-1"}):
+            links = legacy_app._upload_file_links("up-1", "Acme Inc", "gmaps")
+            bare = legacy_app._upload_file_links("up-1")
+        # New layout: <company>/<pipeline>/<upload_id>/...
+        self.assertEqual(
+            links["state.json"],
+            "s3://bucket-1/acme-inc/gmaps/up-1/state.json",
+        )
+        self.assertEqual(
+            links["output.json"],
+            "s3://bucket-1/acme-inc/gmaps/up-1/output.json",
+        )
+        # Bare upload_id (no company/pipeline) falls back to the id alone.
+        self.assertEqual(bare["state.json"], "s3://bucket-1/up-1/state.json")
+
+    def test_updates_run_from_state(self):
+        from app.services.serpwow import engine as legacy_app
+
+        svc = mock.MagicMock()
+        state = {
+            "upload_id": "up-1",
+            "run_db_id": "db-9",
+            "status": "completed_with_errors",
+            "success_rows": 7,
+            "failed_rows": 3,
+            "processing_seconds_total": 42.0,
+        }
+        with mock.patch("app.services.companies.get_company_service", return_value=svc):
+            legacy_app._update_supabase_run(state)
+        svc.update_run.assert_called_once()
+        args, kwargs = svc.update_run.call_args
+        self.assertEqual(args[0], "db-9")
+        self.assertEqual(kwargs["status"], "completed_with_errors")
+        self.assertEqual(kwargs["success_count"], 7)
+        self.assertEqual(kwargs["failed_count"], 3)
+        self.assertEqual(kwargs["duration_seconds"], 42.0)
+        self.assertIn("state.json", kwargs["file_links"])
+        self.assertIn("output.json", kwargs["file_links"])
+        self.assertIn("finished_at", kwargs)
+
+    def test_no_run_db_id_is_noop(self):
+        from app.services.serpwow import engine as legacy_app
+
+        svc = mock.MagicMock()
+        with mock.patch("app.services.companies.get_company_service", return_value=svc):
+            legacy_app._update_supabase_run({"upload_id": "up-1", "status": "completed"})
+        svc.update_run.assert_not_called()
+
+    def test_never_raises(self):
+        from app.services.serpwow import engine as legacy_app
+
+        with mock.patch(
+            "app.services.companies.get_company_service",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertFalse(
+                legacy_app._update_supabase_run({"upload_id": "u", "run_db_id": "x"})
+            )
+
+    def test_returns_update_run_result(self):
+        from app.services.serpwow import engine as legacy_app
+
+        state = {"upload_id": "up-1", "run_db_id": "db-9", "status": "completed"}
+        for update_ok in (True, False):
+            svc = mock.MagicMock()
+            svc.update_run.return_value = update_ok
+            with mock.patch(
+                "app.services.companies.get_company_service", return_value=svc
+            ):
+                self.assertEqual(legacy_app._update_supabase_run(state), update_ok)
+
+
+class TestShouldSyncSupabase(unittest.TestCase):
+    def test_unsynced_snapshot_syncs(self):
+        from app.services.serpwow.engine import _should_sync_supabase
+
+        self.assertTrue(_should_sync_supabase({}, "completed:7:3"))
+
+    def test_synced_marker_skips(self):
+        from app.services.serpwow.engine import _should_sync_supabase
+
+        state = {"supabase_sync_marker": "completed:7:3"}
+        self.assertFalse(_should_sync_supabase(state, "completed:7:3"))
+
+    def test_failed_marker_skips_same_snapshot_but_retries_new_one(self):
+        from app.services.serpwow.engine import _should_sync_supabase
+
+        state = {"supabase_sync_failed_marker": "completed_with_errors:5:5"}
+        # Same snapshot whose sync already failed: don't re-stall every persist.
+        self.assertFalse(_should_sync_supabase(state, "completed_with_errors:5:5"))
+        # Different terminal snapshot (e.g. retry re-completed): retry once.
+        self.assertTrue(_should_sync_supabase(state, "completed:10:0"))
+
+
+class TestSerpwowUploadCsvGate(unittest.TestCase):
+    """Spec §3: the canonical CSV validator gates the legacy SerpWow upload endpoints."""
+
+    OLD_COMPANY_MODE_CSV = (
+        "companies.csv",
+        "Company Name ENG,Company Name Local,Country Code,ISIC\n"
+        "Acme,アクメ,JP,2200\n".encode("utf-8"),
+        "text/csv",
+    )
+    CANONICAL_CSV = ("companies.csv", b"company_name,country\nAcme,Japan\n", "text/csv")
+
+    def setUp(self):
+        from app.services.serpwow import engine as legacy_app
+
+        self.legacy_app = legacy_app
+        # Plain (non-context-manager) TestClient: startup events don't run, so
+        # no RabbitMQ connection is attempted and rabbitmq_exchange stays as-is.
+        self.client = TestClient(legacy_app.app)
+
+    @staticmethod
+    def _svc():
+        svc = mock.MagicMock()
+        svc.get_company.return_value = {"id": "u1", "name": "Acme"}
+        svc.create_run.return_value = "db-run-1"
+        return svc
+
+    def test_old_company_mode_csv_rejected_400(self):
+        for path in ("/uploads/gsearch", "/uploads/gmaps"):
+            with mock.patch(
+                "app.services.companies.get_company_service", return_value=self._svc()
+            ):
+                res = self.client.post(
+                    path,
+                    files={"file": self.OLD_COMPANY_MODE_CSV},
+                    data={"company_id": "u1"},
+                )
+            self.assertEqual(res.status_code, 400, path)
+            self.assertIn("missing required columns", res.json()["detail"])
+
+    def test_canonical_csv_passes_gate(self):
+        # The gate passes; with RabbitMQ disconnected the endpoint then 503s —
+        # which proves validation succeeded (a gate rejection would be a 400).
+        with mock.patch(
+            "app.services.companies.get_company_service", return_value=self._svc()
+        ), mock.patch.object(self.legacy_app, "rabbitmq_exchange", None):
+            res = self.client.post(
+                "/uploads/gsearch", files={"file": self.CANONICAL_CSV}, data={"company_id": "u1"}
+            )
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("RabbitMQ", res.json()["detail"])
+
+    def test_firmographics_keeps_own_parser_no_gate(self):
+        """A website-only CSV fails the canonical validator but IS the valid firmographics
+        format, so it must get past CSV validation.
+
+        Since the 2026-08-20 S3-only migration this endpoint no longer needs the broker to
+        accept an upload (the re-drive scan starts a run published without one), so "got
+        past the parser" is now proven by the NEXT gate it hits: the config check for
+        SCRAPEDO_TOKEN. A canonical-validator rejection would have been a 400 naming the
+        company_name/country columns instead.
+        """
+        firmo_csv = ("sites.csv", b"official_website\nhttps://acme.com\n", "text/csv")
+        with mock.patch(
+            "app.services.companies.get_company_service", return_value=self._svc()
+        ), mock.patch.object(self.legacy_app, "rabbitmq_exchange", None):
+            res = self.client.post(
+                "/uploads/firmographics",
+                files={"file": firmo_csv},
+                data={"company_id": "u1"},
+            )
+        self.assertEqual(res.status_code, 400)
+        detail = res.json()["detail"]
+        self.assertIn("SCRAPEDO_TOKEN", detail)
+        self.assertNotIn("company_name", detail)
+
+
+class TestRunningStateSync(unittest.TestCase):
+    """Spec §4: one-shot runs-row 'running' sync when rows start processing."""
+
+    def test_first_processing_snapshot_syncs(self):
+        from app.services.serpwow.engine import _should_sync_running
+
+        self.assertTrue(
+            _should_sync_running({"run_db_id": "db-9", "status": "processing"})
+        )
+
+    def test_marker_prevents_refire(self):
+        from app.services.serpwow.engine import _should_sync_running
+
+        state = {
+            "run_db_id": "db-9",
+            "status": "processing",
+            "supabase_running_marker": True,
+        }
+        self.assertFalse(_should_sync_running(state))
+
+    def test_queued_and_terminal_states_skip(self):
+        from app.services.serpwow.engine import _should_sync_running
+
+        for status in ("queued", "completed", "completed_with_errors", "failed"):
+            self.assertFalse(
+                _should_sync_running({"run_db_id": "db-9", "status": status}), status
+            )
+
+    def test_untracked_upload_skips(self):
+        from app.services.serpwow.engine import _should_sync_running
+
+        self.assertFalse(_should_sync_running({"status": "processing"}))
+
+    def test_mark_running_updates_run(self):
+        from app.services.serpwow import engine as legacy_app
+
+        svc = mock.MagicMock()
+        svc.update_run.return_value = True
+        state = {"upload_id": "up-1", "run_db_id": "db-9", "status": "processing"}
+        with mock.patch("app.services.companies.get_company_service", return_value=svc):
+            self.assertTrue(legacy_app._mark_supabase_run_running(state))
+        svc.update_run.assert_called_once()
+        args, kwargs = svc.update_run.call_args
+        self.assertEqual(args[0], "db-9")
+        self.assertEqual(kwargs["status"], "running")
+        self.assertIn("started_at", kwargs)
+
+    def test_mark_running_never_raises(self):
+        from app.services.serpwow import engine as legacy_app
+
+        with mock.patch(
+            "app.services.companies.get_company_service",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertFalse(
+                legacy_app._mark_supabase_run_running(
+                    {"upload_id": "u", "run_db_id": "x"}
+                )
+            )
 
 
 if __name__ == "__main__":

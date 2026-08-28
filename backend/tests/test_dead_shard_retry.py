@@ -14,9 +14,9 @@ import unittest
 
 from app.services.ai_mode import gemini_batch
 from app.services.common import llm_batch
-from app.services.relationship import relationship_runner
+from app.services.serpwow import firmographics_runner, relationship_runner
 
-RUNNERS = (relationship_runner,)
+RUNNERS = (firmographics_runner, relationship_runner)
 
 
 class FakeBatchModule:

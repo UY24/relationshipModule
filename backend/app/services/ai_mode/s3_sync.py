@@ -1,7 +1,7 @@
 """Mirror a completed AI Mode run dir to S3 under <company>/<mode>/<run_id>/.
 
 Never raises: S3 failures are logged and swallowed so a run always completes on
-disk (never fail the run).
+disk (matches SerpWow's never-fail-the-run design).
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def mirror_file_to_s3(run_dir: Path, mode_key: str, local_path: Path) -> bool:
     """Write-through one file to S3 under the run's prefix, as it's produced.
 
     Best-effort: no-ops when S3 is unconfigured, swallows+logs all errors, never
-    raises (must not slow or fail the scrape/clean hot path). Mirrors the relationship
+    raises (must not slow or fail the scrape/clean hot path). Mirrors SerpWow's
     per-row upload pattern so a hard-killed run (OOM / SIGKILL / spot reclaim that
     bypasses the end-of-run mirror) is still resumable from S3.
     """

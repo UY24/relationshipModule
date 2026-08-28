@@ -53,11 +53,11 @@ class TestCompanyService(unittest.TestCase):
         table = make_table_mock([{"id": "r1"}])
         client.table.return_value = table
         run_id = CompanyService(client).create_run(
-            company_id="u1", pipeline="relationship", run_ref="run-123", total_rows=10)
+            company_id="u1", pipeline="gmaps", run_ref="run-123", total_rows=10)
         self.assertEqual(run_id, "r1")
         client.table.assert_called_with("runs")
         table.insert.assert_called_once_with({
-            "company_id": "u1", "pipeline": "relationship", "run_ref": "run-123",
+            "company_id": "u1", "pipeline": "gmaps", "run_ref": "run-123",
             "status": "queued", "total_rows": 10, "rerun_of": None})
 
     def test_create_run_exception_returns_none(self):
@@ -65,7 +65,7 @@ class TestCompanyService(unittest.TestCase):
         client.table.side_effect = RuntimeError("down")
         with self.assertLogs("app.services.companies", level="ERROR"):
             run_id = CompanyService(client).create_run(
-                company_id="u1", pipeline="relationship", run_ref="run-123")
+                company_id="u1", pipeline="gmaps", run_ref="run-123")
         self.assertIsNone(run_id)
 
     def test_update_run_retries_then_succeeds(self):
@@ -92,11 +92,11 @@ class TestCompanyService(unittest.TestCase):
         client = mock.MagicMock()
         table = make_table_mock([{"id": "r1"}])
         client.table.return_value = table
-        runs = CompanyService(client).list_runs(company_id="u1", pipeline="relationship", limit=5)
+        runs = CompanyService(client).list_runs(company_id="u1", pipeline="gmaps", limit=5)
         self.assertEqual(runs, [{"id": "r1"}])
         client.table.assert_called_with("runs")
         table.eq.assert_has_calls([
-            mock.call("company_id", "u1"), mock.call("pipeline", "relationship")])
+            mock.call("company_id", "u1"), mock.call("pipeline", "gmaps")])
         table.order.assert_called_once_with("created_at", desc=True)
         table.limit.assert_called_once_with(5)
 

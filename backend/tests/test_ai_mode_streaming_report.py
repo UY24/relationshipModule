@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from app.models.results import AttemptLogEntry, EntityResult, Flag
 from app.services.ai_mode.run_reporting import StreamingRunReport, write_outputs
-from app.services.relationship.outcomes import SRC_SCRAPEDO
+from app.services.serpwow.outcomes import SRC_SCRAPEDO
 
 
 def _results():

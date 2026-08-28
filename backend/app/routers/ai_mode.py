@@ -66,7 +66,7 @@ async def create_ai_mode_upload(
     from app.services.ai_mode import broker as ai_broker
 
     # Gate BEFORE prepare so a broker outage never leaves an orphan run dir
-    # (same contract as the relationship 503 when RabbitMQ is down).
+    # (same contract as SerpWow's 503 when RabbitMQ is down).
     if not ai_broker.is_ready():
         raise HTTPException(status_code=503, detail=_broker_unavailable_detail())
     svc = get_company_service()

@@ -1,7 +1,7 @@
 """AI Mode payload -> evidence + candidate set for the unchanged relationship gate."""
 import unittest
 
-from app.services.relationship.modes.relationship import (
+from app.services.serpwow.modes.relationship import (
     build_evidence,
     evidence_text,
     extract_https_urls,
@@ -80,8 +80,8 @@ class EvidenceTests(unittest.TestCase):
 
     def test_text_blocks_are_joined_into_one_evidence_block(self) -> None:
         ev = build_evidence(ENVELOPE, x_domain="acme.com")
-        self.assertEqual(len(ev["ai_mode_evidence"]), 1)
-        block = ev["ai_mode_evidence"][0]
+        self.assertEqual(len(ev["ai_overview_evidence"]), 1)
+        block = ev["ai_overview_evidence"][0]
         self.assertIn("Series A", block["text"])
         self.assertTrue(any(s["url"] == "https://drinksanzo.com"
                             for s in block["sources"]))
@@ -97,7 +97,7 @@ class EvidenceTests(unittest.TestCase):
              "billed_empty": True},
             x_domain="acme.com")
         self.assertEqual(ev["candidates"], [])
-        self.assertEqual(ev["ai_mode_evidence"], [])
+        self.assertEqual(ev["ai_overview_evidence"], [])
         self.assertEqual(ev["search_attempts"][0]["status"], "no_candidates")
 
     def test_provider_error_is_recorded_on_the_attempt(self) -> None:
@@ -138,14 +138,14 @@ class WholeResponseTests(unittest.TestCase):
 
     def test_list_items_reach_the_evidence_text(self) -> None:
         text = build_evidence({"response": STRUCTURED}, "gnv.com")[
-            "ai_mode_evidence"][0]["text"]
+            "ai_overview_evidence"][0]["text"]
         self.assertIn("$7,000,000", text)
         self.assertIn("Founder Lodge", text)
         self.assertIn("Parsers VC", text)
 
     def test_the_answers_own_sections_survive_in_order(self) -> None:
         text = build_evidence({"response": STRUCTURED}, "gnv.com")[
-            "ai_mode_evidence"][0]["text"]
+            "ai_overview_evidence"][0]["text"]
         for heading in ("1. RELATIONSHIP", "2. EVIDENCE", "3. WEBSITE"):
             self.assertIn(heading, text)
         self.assertLess(text.index("1. RELATIONSHIP"), text.index("2. EVIDENCE"))
@@ -165,7 +165,7 @@ class WholeResponseTests(unittest.TestCase):
             "references": []}
         ev = build_evidence({"response": linked_only}, "acme.com")
         self.assertIn("https://drinksanzo.com/", ev["candidates"])
-        self.assertIn("https://drinksanzo.com/", ev["ai_mode_evidence"][0]["text"])
+        self.assertIn("https://drinksanzo.com/", ev["ai_overview_evidence"][0]["text"])
 
     def test_a_key_we_have_never_seen_still_reaches_the_model(self) -> None:
         """The point of the exclude-list: a key scrape.do adds tomorrow needs no code
@@ -188,7 +188,7 @@ class WholeResponseTests(unittest.TestCase):
             "text_blocks": [{"type": "paragraph", "snippet": "https://www.pitchly.com"}],
             "references": []}}, "gnv.com")
         self.assertEqual(ev["candidates"], ["https://www.pitchly.com"])
-        self.assertNotIn("example.com", ev["ai_mode_evidence"][0]["text"])
+        self.assertNotIn("example.com", ev["ai_overview_evidence"][0]["text"])
 
     def test_structural_metadata_is_not_emitted_as_prose(self) -> None:
         """Block type names and heading levels are structure, not text: emitting them puts

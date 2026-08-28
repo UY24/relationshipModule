@@ -1,17 +1,20 @@
 # backend/app/services/common/llm_batch.py
-"""One resolver for every Gemini Batch setting, shared by both pipelines.
+"""One resolver for every Gemini Batch setting, shared by all four pipelines.
 
-``ai_bulk``/``ai_deep`` and ``relationship`` call ONE driver — ``ai_mode/gemini_batch.py``.
-Only the config around it had drifted: the shard size lived under two key names with the
-same default, and the model resolved differently per pipeline.
+All four (``ai_bulk``/``ai_deep``, ``gsearch``, ``firmographics``, ``relationship``) already
+call ONE driver — ``ai_mode/gemini_batch.py``. Only the config around it had drifted: the
+shard size lived under two key names with the same default, the model resolved differently
+per pipeline, and there were three toggles plus one pipeline with none.
 
-Lives in ``common/`` because it must be importable from both ``relationship/`` and
-``ai_mode/`` without a cycle, alongside the other cross-provider helpers (``text``,
-``env``, ``provider_limits``).
+Lives in ``common/`` because it must be importable from both ``serpwow/`` and ``ai_mode/``
+without a cycle, alongside the other cross-provider helpers (``text``, ``env``,
+``provider_limits``).
 
-**ONE toggle: ``LLM_BATCH``.** The per-pipeline overrides were deleted 2026-08-20. They
-bought granularity nobody used and cost a second place to look when a run came out in the
-wrong mode.
+**ONE toggle: ``LLM_BATCH``.** The per-pipeline overrides (``AI_MODE_LLM_BATCH``,
+``GSEARCH_LLM_BATCH``, ``FIRMOGRAPHICS_LLM_BATCH``) were deleted 2026-08-20. They bought
+granularity nobody used and cost a second place to look when a run came out in the wrong
+mode: the global only appeared to work because all three happened to be blank, and one
+non-blank value silently exempted that pipeline from it.
 
 **Blank counts as unset.** ``env.get_bool_env`` falls back only when a variable is ABSENT,
 while ``.env.example`` ships every key as ``NAME=`` — so a blank line would otherwise read
@@ -35,8 +38,13 @@ DEFAULT_POLL_SEC = 15
 
 # Pipelines that genuinely have a choice, i.e. the ones LLM_BATCH moves. A pipeline absent
 # here has no toggle, and inventing one would mean a setting that cannot be honoured:
-# relationship's Gemini call IS the verdict, so there is no inline path to switch to.
-_TOGGLEABLE = {"ai_bulk", "ai_deep"}
+#   relationship -- its Gemini call IS the verdict; there is no inline path to switch to.
+#   gmaps        -- no LLM at all since it moved to the S3-only runner.
+#
+# Spelled out rather than derived from _SHARED_ROW_BATCH below: AI Mode is toggleable but
+# does NOT run through engine's shared row-batch driver, and conflating those two sets is
+# the exact bug this module exists to prevent.
+_TOGGLEABLE = {"ai_bulk", "ai_deep", "gsearch", "firmographics"}
 
 # Pipelines whose LLM work is ALWAYS a batch job, toggle or no toggle.
 _ALWAYS_BATCH = {"relationship"}
@@ -55,6 +63,23 @@ def _flag(name: str) -> bool | None:
         return None
     return raw.strip().lower() in _TRUE
 
+
+# Pipelines whose batch work runs through engine's SHARED row-batch engine (one Gemini job
+# per chunk of rows, driven from persist_upload_state). relationship is absent even though it
+# batches: it owns a separate driver in relationship_runner, so routing it here would seed a
+# second, duplicate job. Keeping this apart from batch_enabled is the difference between
+# "is this batched?" and "is it batched BY THIS ENGINE?" -- conflating them made engine's gate
+# claim relationship.
+_SHARED_ROW_BATCH = {"gsearch", "firmographics"}
+
+
+def uses_shared_row_batch(pipeline: str) -> bool:
+    """True when ``engine``'s chunked row-batch driver should handle this pipeline.
+
+    This is the gate for ``maybe_start_gemini_batch_for_upload`` and friends — NOT a general
+    "is batching on" question. See ``batch_enabled`` for that.
+    """
+    return str(pipeline or "") in _SHARED_ROW_BATCH and batch_enabled(pipeline)
 
 
 def batch_enabled(pipeline: str) -> bool:
@@ -110,12 +135,12 @@ def batch_model() -> str:
 
 
 def shard_size() -> int:
-    """Rows per Batch job."""
+    """Rows per Batch job. Was also ``GSEARCH_GEMINI_CHUNK_SIZE`` — same number, two names."""
     return max(1, get_int_env("GEMINI_BATCH_SHARD_SIZE", DEFAULT_SHARD_SIZE))
 
 
 def max_inflight() -> int:
-    """Concurrent Batch jobs."""
+    """Concurrent Batch jobs. Was also ``GSEARCH_GEMINI_MAX_INFLIGHT``."""
     return max(1, get_int_env("GEMINI_BATCH_MAX_INFLIGHT", DEFAULT_MAX_INFLIGHT))
 
 

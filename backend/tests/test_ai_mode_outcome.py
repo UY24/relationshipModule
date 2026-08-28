@@ -1,4 +1,4 @@
-"""AI Mode found/not_found/error taxonomy, shared with the relationship pipeline.
+"""AI Mode found/not_found/error taxonomy parity with SerpWow (Task 10).
 
 Verifies the 3-way outcome classification, error source/category breakdowns, and
 that the Supabase mapping counts genuine errors (not not_found) as failures.
@@ -11,7 +11,7 @@ from app.services.ai_mode.ai_mode_service import (
     classify_ai_mode_outcomes,
     classify_one_result,
 )
-from app.services.relationship.outcomes import (
+from app.services.serpwow.outcomes import (
     CAT_INTERNAL,
     CAT_RATE_LIMIT,
     SRC_GEMINI,

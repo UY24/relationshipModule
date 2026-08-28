@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from app.services.relationship.gemini_llm import (
+from app.services.serpwow.gemini_llm import (
     apply_relationship_gate,
     build_relationship_prompt,
     update_relationship_block,

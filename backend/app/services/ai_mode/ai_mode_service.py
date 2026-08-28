@@ -55,7 +55,7 @@ from app.services.ai_mode.run_reporting import (  # noqa: F401 (classify_one_res
 )
 from app.services.ai_mode.scrapedo_client import ScrapeDoClient
 from app.services.ai_mode.settings import LLMConfig, Settings
-from app.services.relationship.outcomes import (
+from app.services.serpwow.outcomes import (
     SRC_GEMINI,
     SRC_SCRAPEDO,
     categorize_http_error,
@@ -305,7 +305,7 @@ def _scrapedo_failed_request_count(records: list[dict]) -> int:
 
 
 def classify_ai_mode_outcomes(results: list[EntityResult]) -> tuple[dict, dict]:
-    """Bucket finalized entities into found / not_found / error.
+    """Bucket finalized entities into found / not_found / error (SerpWow parity).
 
     Per-entity rule (evaluated in this order, so every entity lands in exactly
     one bucket -> ``found + not_found + errored == len(results)``):
@@ -1244,7 +1244,7 @@ def run_ai_mode_finish(
         total_wall = time.perf_counter() - wall_t0
         completed_at = utc_now_iso()
         failed_request_count = _failed_request_count(per_request_records)
-        # 3-way outcome taxonomy: found / not_found / error.
+        # 3-way outcome taxonomy (SerpWow parity): found / not_found / error.
         # The streaming report classified (and tagged) every row as it was added,
         # so the breakdowns are read off its counters — no results list needed.
         websites_found = report.websites_found
@@ -1350,7 +1350,7 @@ def run_ai_mode_finish(
             else None
         )
         _persist_status(run_id, run_dir, status)
-        # Tracked file links point to S3 (s3:// links) when S3 is
+        # Tracked file links point to S3 (matches SerpWow's s3:// links) when S3 is
         # configured; fall back to the local path otherwise. The run dir is mirrored
         # to S3 (write-through during the run + the end-of-run mirror below), so
         # these URIs resolve to real objects.

@@ -5,8 +5,8 @@ import json
 import unittest
 from unittest import mock
 
-from app.services.relationship import relationship_outputs as outputs
-from app.services.relationship import s3_run_store as store
+from app.services.serpwow import relationship_outputs as outputs
+from app.services.serpwow import s3_run_store as store
 from tests.test_s3_run_store import FakeS3, _patched
 
 PREFIX = "acme/relationship/run1"
@@ -192,7 +192,7 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(s["relationship_breakdown"]["confirmed"], 1)
         self.assertEqual(s["outcome_breakdown"]["errored"], 1)
 
-    def test_cost_is_credits_only_with_no_per_search_usd_keys(self) -> None:
+    def test_cost_is_credits_only_with_no_serpwow_keys(self) -> None:
         fake = FakeS3()
         _seed(fake)
         with _patched(fake):
@@ -325,7 +325,7 @@ class CostAccountingTests(unittest.TestCase):
         self.assertEqual(cost["scrapedo_requests"], 6)              # 1+1+0+4
         self.assertEqual(cost["scrapedo_successful_requests"], 2)   # confirmed + billed error
         self.assertEqual(cost["scrapedo_failed_requests"], 4)       # only HardFail's attempts
-        # error_requests must never exceed failed_requests: the
+        # error_requests must never exceed failed_requests (the gmaps framing): the
         # billed-error-body row's one attempt succeeded at the HTTP layer, so it
         # contributes 0, not 1.
         self.assertEqual(cost["scrapedo_error_requests"], 4)
@@ -360,7 +360,7 @@ class CostAccountingTests(unittest.TestCase):
 
         self.assertEqual(summary["status"], "stopped")
         self.assertEqual(status["phase"], "stopped")
-        from app.services.relationship import s3_run_driver as driver
+        from app.services.serpwow import s3_run_driver as driver
         self.assertIn("stopped", driver.TERMINAL_PHASES)
 
     def test_task_errors_label_the_run_completed_with_errors(self) -> None:

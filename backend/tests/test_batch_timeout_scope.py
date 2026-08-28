@@ -7,13 +7,13 @@ statements in ``_phases``. If anyone ever hoists that deadline to run start (or 
 of the LLM phase), a long scrape would silently eat the batch's budget and every shard
 would time out at once — losing verdicts for work already paid for on Google's side.
 
-Pinned here so the deadline cannot drift out of the poll.
+Both S3-only batch pipelines have the identical loop, so both are pinned here.
 """
 import time
 import unittest
 from unittest import mock
 
-from app.services.relationship import relationship_runner
+from app.services.serpwow import firmographics_runner, relationship_runner
 
 # Longer than any real scrape phase: if the deadline were anchored anywhere earlier than
 # the poll itself, five days of monotonic time would already be past it.
@@ -61,7 +61,7 @@ class BatchDeadlineStartsAtThePollTests(unittest.TestCase):
             return module._poll_to_terminal(gb, "batches/abc", None)
 
     def test_five_days_of_scraping_does_not_consume_the_batch_budget(self) -> None:
-        for module in (relationship_runner,):
+        for module in (firmographics_runner, relationship_runner):
             with self.subTest(module=module.__name__):
                 # The clock is already 5 days in: that is the scrape phase having run.
                 clock = FakeClock(start=FIVE_DAYS)
@@ -76,7 +76,7 @@ class BatchDeadlineStartsAtThePollTests(unittest.TestCase):
         """The companion, or the test above passes vacuously: a shard that genuinely
         outlives the timeout must still raise, so the batch record survives and the next
         drive re-attaches instead of paying Google for a second identical job."""
-        for module in (relationship_runner,):
+        for module in (firmographics_runner, relationship_runner):
             with self.subTest(module=module.__name__):
                 clock = FakeClock(start=FIVE_DAYS)
                 gb = FakeBatch(polls_needed=10**9)     # never finishes
@@ -91,7 +91,7 @@ class BatchDeadlineStartsAtThePollTests(unittest.TestCase):
         clock = FakeClock(start=FIVE_DAYS)
         for _ in range(3):
             gb = FakeBatch(polls_needed=200)           # ~50 min each
-            self._poll(relationship_runner, clock, gb)
+            self._poll(firmographics_runner, clock, gb)
         # Nearly 2.5h of LLM phase against a 1h per-shard timeout, and nothing raised.
         self.assertGreater(clock.now - FIVE_DAYS, 3600 * 2)
 

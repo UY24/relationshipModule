@@ -1,6 +1,6 @@
 import unittest
-from app.services.relationship import outcomes as o
-from app.services.relationship.constants import REL_ERROR_NOT_CONFIRMED, REL_ERROR_NO_EVIDENCE
+from app.services.serpwow import outcomes as o
+from app.services.serpwow.constants import REL_ERROR_NOT_CONFIRMED, REL_ERROR_NO_EVIDENCE
 
 
 def _result(official=None, phases=None, llm_error=None):
@@ -17,7 +17,7 @@ def _result(official=None, phases=None, llm_error=None):
 
 class TestOutcomeInfo(unittest.TestCase):
     def test_row_status_error_is_failed(self):
-        self.assertEqual(o.OutcomeInfo(o.OUTCOME_ERROR, o.SRC_SCRAPEDO, o.CAT_TIMEOUT).row_status, "failed")
+        self.assertEqual(o.OutcomeInfo(o.OUTCOME_ERROR, o.SRC_SERPWOW, o.CAT_TIMEOUT).row_status, "failed")
 
     def test_row_status_notfound_is_completed(self):
         self.assertEqual(o.OutcomeInfo(o.OUTCOME_NOT_FOUND).row_status, "completed")
@@ -70,3 +70,88 @@ class TestClassifyException(unittest.TestCase):
         self.assertEqual(info.error_source, o.SRC_SERVER)
 
 
+class TestClassifyFinalizedRow(unittest.TestCase):
+    def test_found(self):
+        info = o.classify_finalized_row(_result(official="https://x.com"),
+                                        pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_FOUND)
+
+    def test_not_found_when_a_phase_searched(self):
+        r = _result(official=None, phases=[{"used": True}])
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_NOT_FOUND)
+        self.assertFalse(info.degraded_search)
+
+    def test_degraded_when_some_phases_errored_but_one_searched(self):
+        r = _result(official=None, phases=[{"used": True},
+                                           {"used": False, "error": "boom", "error_category": o.CAT_TIMEOUT}])
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_NOT_FOUND)
+        self.assertTrue(info.degraded_search)
+
+    def test_error_serpwow_when_all_phases_errored(self):
+        r = _result(official=None, phases=[{"used": False, "error": "429", "error_category": o.CAT_RATE_LIMIT},
+                                           {"used": False, "error": "429", "error_category": o.CAT_RATE_LIMIT}])
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual((info.outcome, info.error_source, info.error_category),
+                         (o.OUTCOME_ERROR, o.SRC_SERPWOW, o.CAT_RATE_LIMIT))
+
+    def test_blank_error_preserves_explicit_timeout_category(self):
+        r = _result(official=None, phases=[
+            {"used": False, "error": "", "error_category": o.CAT_TIMEOUT},
+        ])
+        info = o.classify_finalized_row(
+            r, pipeline="relationship", ctx_row_error=None, skip_llm=True
+        )
+        self.assertEqual(
+            (info.outcome, info.error_source, info.error_category),
+            (o.OUTCOME_ERROR, o.SRC_SERPWOW, o.CAT_TIMEOUT),
+        )
+
+    def test_relationship_sentinel_is_not_found(self):
+        info = o.classify_finalized_row(_result(official=None), pipeline="relationship",
+                                        ctx_row_error=REL_ERROR_NOT_CONFIRMED, skip_llm=True)
+        self.assertEqual(info.outcome, o.OUTCOME_NOT_FOUND)
+
+    def test_relationship_no_evidence_does_not_hide_total_serpwow_failure(self):
+        r = _result(official=None, phases=[
+            {"used": False, "error": "timeout", "error_category": o.CAT_TIMEOUT},
+            {"used": False, "error": "timeout", "error_category": o.CAT_TIMEOUT},
+            {"used": False, "error": "timeout", "error_category": o.CAT_TIMEOUT},
+        ])
+        info = o.classify_finalized_row(
+            r, pipeline="relationship", ctx_row_error=REL_ERROR_NO_EVIDENCE,
+            skip_llm=True)
+        self.assertEqual(
+            (info.outcome, info.error_source, info.error_category),
+            (o.OUTCOME_ERROR, o.SRC_SERPWOW, o.CAT_TIMEOUT),
+        )
+
+    def test_no_phases_no_sentinel_is_not_found(self):
+        # nothing errored, nothing searched, no website -> conservative not_found
+        info = o.classify_finalized_row(_result(official=None), pipeline="gsearch",
+                                        ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_NOT_FOUND)
+
+    def test_found_with_llm_error_is_degraded_found(self):
+        # gsearch falls back to the raw first candidate as official_website, so a
+        # per-row Gemini selection failure still yields a FOUND row -- but it must
+        # be marked degraded so the LLM failure is visible (no error, no retry).
+        r = _result(official="https://x.com", phases=[{"used": True}],
+                    llm_error="Gemini HTTPError: 429")
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_FOUND)
+        self.assertTrue(info.degraded_search)
+
+    def test_found_without_llm_error_is_not_degraded(self):
+        # CONTROL: a found row with no Gemini failure is not degraded.
+        r = _result(official="https://x.com", phases=[{"used": True}])
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_FOUND)
+        self.assertFalse(info.degraded_search)
+
+    def test_succeeded_phase_no_llm_error_is_not_found(self):
+        # CONTROL: same as above but no llm_error -> unchanged not_found.
+        r = _result(official=None, phases=[{"used": True}])
+        info = o.classify_finalized_row(r, pipeline="gsearch", ctx_row_error=None, skip_llm=False)
+        self.assertEqual(info.outcome, o.OUTCOME_NOT_FOUND)
