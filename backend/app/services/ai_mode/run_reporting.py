@@ -5,7 +5,7 @@
 are folded in per batch (memory stays O(one batch)), and ``final_report.json``'s
 ``entities`` array is capped by ``AI_MODE_REPORT_ENTITIES_MAX`` (the CSVs always
 carry every row). ``write_outputs`` keeps its classic signature, reimplemented on
-the streaming writer. Standalone module: imports only models + serpwow.outcomes
+the streaming writer. Standalone module: imports only models + relationship.outcomes
 (never ai_mode_service, which imports us).
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Iterable, Iterator
 
 from app.models.results import EntityResult
 from app.services.common.text import passthrough_fieldnames, passthrough_row
-from app.services.serpwow.outcomes import SRC_GEMINI, categorize_http_error
+from app.services.relationship.outcomes import SRC_GEMINI, categorize_http_error
 
 RESULT_COLUMNS = ["website_url", "confidence", "flags", "attempt_log"]
 # Fallback header, used only when the run's input.csv can't be passed through (see

@@ -10,7 +10,7 @@ from unittest import mock
 
 import httpx
 
-from app.services.serpwow import scrapedo_ai_client as client
+from app.services.relationship import scrapedo_ai_client as client
 
 TOKEN_ENV = {"SCRAPEDO_TOKEN": "test-token", "SCRAPEDO_MAX_RETRIES": "3",
              "SCRAPEDO_TIMEOUT_SECONDS": "5"}
@@ -133,7 +133,7 @@ class SafetyTests(unittest.TestCase):
 
     def test_errors_name_the_ai_mode_endpoint_not_google_maps(self) -> None:
         """This string is persisted per row and shown in "View failed rows". Reusing the
-        gmaps helper's hardcoded text reported every transport error, 429 and 5xx on this
+        helper's old hardcoded text reported every transport error, 429 and 5xx on this
         pipeline as a Google MAPS failure."""
         env = _run(lambda request: httpx.Response(500, json={"error": "upstream boom"}),
                    SCRAPEDO_MAX_RETRIES="0")

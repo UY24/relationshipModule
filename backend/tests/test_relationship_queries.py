@@ -1,7 +1,7 @@
 """The single relationship AI Mode search query."""
 import unittest
 
-from app.services.serpwow.query_builders import (
+from app.services.relationship.query_builders import (
     build_relationship_search_query,
     load_relationship_prompt,
 )
