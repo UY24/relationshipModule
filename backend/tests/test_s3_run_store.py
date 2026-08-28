@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest import mock
 
-from app.services.serpwow import s3_run_store as store
+from app.services.relationship import s3_run_store as store
 
 
 class FakeS3:
@@ -186,7 +186,7 @@ class CountersTests(unittest.TestCase):
             self.assertEqual(fake.put_calls, first + 1)
 
     def test_bump_rejects_an_unknown_counter(self) -> None:
-        """It used to drop them silently, which cost gmaps a whole counter."""
+        """It used to drop them silently, which cost a whole counter."""
         with self.assertRaises(KeyError):
             store.Counters("acme/relationship/run1").bump(rows_no_listings=1)
 

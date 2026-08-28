@@ -1,7 +1,7 @@
 """Self-contained Gemini Batch API helpers (native ``generativelanguage`` REST).
 
 Used by :mod:`ai_mode_service` for the batch LLM-cleanup phase. Intentionally has
-NO imports from ``app.py`` (avoids a circular import and keeps the SerpWow path
+NO imports from ``app/engine.py`` (avoids a circular import and keeps the relationship path
 untouched). Stdlib-only (``urllib``) so it stays dependency-light.
 
 Batch input always goes through the **File API**: a JSONL file is uploaded and
@@ -256,7 +256,7 @@ def is_terminal(state: str, done_flag: bool) -> bool:
 
 # Google said the job is over AND produced nothing. Checked before `done`, because an
 # expired or cancelled job can come back with done=true and no error body -- which the
-# `not batch_obj.get("error")` fallback below read as SUCCESS. engine's gsearch chunk
+# `not batch_obj.get("error")` fallback below read as SUCCESS. A dead chunk
 # driver carried a private copy of this set to defend against exactly that; the two S3-only
 # runners did not, and silently persisted empty results for a whole shard.
 FAILED_STATES = {

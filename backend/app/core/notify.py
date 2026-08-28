@@ -7,7 +7,7 @@ Slack outage or a bad webhook can never affect a pipeline run. Nothing here rais
 Messages use Slack Block Kit: a plain status header, short summary, and grouped
 field grid so the important run details are easy to scan. A concise ``text``
 fallback is always included for push notifications / accessibility. Used by both
-pipelines (AI Mode in the FastAPI process, SerpWow in the worker); both load
+pipelines (AI Mode in the FastAPI process, relationship in the worker); both load
 ``.env``, so one env var reaches both.
 """
 from __future__ import annotations
@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 _PIPELINE_LABELS = {
     "ai_bulk": "Google AI (Bulk)",
     "ai_deep": "Google AI (Deep)",
-    "gmaps": "Google Maps",
-    "gsearch": "Google Search",
-    "firmographics": "Firmographics",
+    "relationship": "Financial Relationship",
 }
 
 
@@ -133,13 +131,12 @@ def notify_run_complete(*, pipeline: str, company: str | None, run_ref: str, sta
                         search_label: str = "Searches", credits: int | None = None,
                         tokens: int | None = None, input_tokens: int | None = None,
                         output_tokens: int | None = None, cost_usd: float | None = None,
-                        llm_cost_usd: float | None = None, serpwow_cost_usd: float | None = None,
+                        llm_cost_usd: float | None = None,
                         duration_seconds: float | None = None,
                         llm_errors: int | None = None) -> bool:
     """Notify that a run reached a terminal completed / completed_with_errors state.
 
-    ``search_label`` names the search unit for the source engine, e.g.
-    ``"Scrape.do searches"`` (AI Mode) or ``"SerpWow searches"``.
+    ``search_label`` names the search unit, e.g. ``"Scrape.do searches"``.
     """
     if status == "completed_with_errors":
         headline = "⚠️ Run completed with errors"
@@ -162,14 +159,10 @@ def notify_run_complete(*, pipeline: str, company: str | None, run_ref: str, sta
         fields.append(_field("🎯 Outcome", f"*{success or 0:,}* succeeded\n*{failed or 0:,}* failed"))
     if isinstance(total_rows, int):
         fields.append(_field("📋 Rows", f"{total_rows:,}"))
-    # Provider cell: searches THEN cost when a per-search USD is given; credits when the
-    # provider bills in credits (scrape.do Google Maps); otherwise the bare count
-    # (e.g. AI Mode's scrape.do flat-fee searches).
+    # Provider cell: credits when the provider bills in credits (scrape.do), otherwise
+    # the bare count (AI Mode's scrape.do flat-fee searches).
     if isinstance(searches, int):
-        if isinstance(serpwow_cost_usd, (int, float)):
-            fields.append(_field(f"🔎 {search_label}",
-                                 f"{searches:,} searches · {_fmt_usd(serpwow_cost_usd)}"))
-        elif isinstance(credits, int):
+        if isinstance(credits, int):
             fields.append(_field(f"🔎 {search_label}",
                                  f"{searches:,} requests · {credits:,} credits"))
         else:
@@ -180,7 +173,7 @@ def notify_run_complete(*, pipeline: str, company: str | None, run_ref: str, sta
         if tin and tout:
             val += f"\n{tin} input / {tout} output"
         fields.append(_field("🪙 Tokens", val))
-    # Cost cell: when the LLM/SerpWow split is provided, show LLM + Total (SerpWow
+    # Cost cell: when the LLM/provider split is provided, show LLM + Total (provider
     # is already in the 🔎 cell above); otherwise a single total.
     if isinstance(llm_cost_usd, (int, float)) and isinstance(cost_usd, (int, float)):
         fields.append(_field("💰 Cost", f"LLM {_fmt_usd(llm_cost_usd)}\nTotal {_fmt_usd(cost_usd)}"))

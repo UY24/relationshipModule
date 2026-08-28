@@ -2,13 +2,11 @@
 """Shared provider concurrency gates.
 
 scrape.do's concurrency cap is per **account**, and two independent pipelines hit it
-from the same worker process — the gmaps pipeline (``serpwow/scrapedo_maps_client``)
-and AI Mode (``ai_mode/worker``). Two separate limits could therefore sum past the
-account cap, so they share ONE gate here.
+from the same worker process — relationship (``relationship/scrapedo_ai_client``) and
+AI Mode (``ai_mode/worker``). Two separate limits could therefore sum past the account
+cap, so they share ONE gate here.
 
-This mirrors what already exists for the other provider: SerpWow calls are gated by
-``serpwow_client.search_fetch_semaphore`` (sized by ``SEARCH_FETCH_CONCURRENCY``).
-The knobs are per-provider, not per-pipeline, because that's what the vendors limit.
+The knob is per-provider, not per-pipeline, because that's what the vendor limits.
 
 Rate limits: if scrape.do turns out to enforce requests-per-second on top of
 concurrency, add a token bucket INSIDE ``scrapedo_slot`` — every caller already goes

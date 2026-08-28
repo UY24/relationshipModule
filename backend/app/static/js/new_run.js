@@ -10,21 +10,6 @@ const _AI_COLS = [
   { name: "industry",     req: false, hint: "input_industry" },
   { name: "full_address", req: false, hint: "address, fulladdress, input_full_address" },
 ];
-const _SW_COLS = [
-  { name: "company_name", req: true,  hint: "company, name, entity_name, entity, organization" },
-  { name: "country",      req: true,  hint: "country_name, nation  (2-letter code or full name)" },
-  { name: "firm_id",      req: false, hint: "firmid, id" },
-  { name: "industry",     req: false, hint: "input_industry" },
-  { name: "full_address", req: false, hint: "address, fulladdress, input_full_address" },
-];
-const _FIRMO_COLS = [
-  { name: "website_url",      req: true,  hint: "official_website, website, url, domain" },
-  { name: "company_name",     req: false, hint: "company, name, entity_name, entity, organization" },
-  { name: "country",          req: false, hint: "country_name, nation" },
-  { name: "firm_id",          req: false, hint: "firmid, id" },
-  { name: "industry",         req: false, hint: "input_industry" },
-  { name: "full_address",     req: false, hint: "address, fulladdress, input_full_address" },
-];
 const _REL_COLS = [
   { name: "Company_Name_Y", req: true,  hint: "the company to find (OCR-derived text is accepted)" },
   { name: "Company_Name_X", req: true,  hint: "the investor firm — the relationship is verified against it" },
@@ -36,24 +21,8 @@ const PIPELINES = [
     desc: "Large batches, broad search, high throughput for residue lists.", csvCols: _AI_COLS },
   { key: "ai_deep", label: "AI Mode 2 - Deep Search", endpoint: "/uploads/ai-mode", ai: true,
     desc: "Small batches, deeper investigation, better for hard targets.", csvCols: _AI_COLS },
-  { key: "gmaps", label: "Google Maps", endpoint: "/uploads/gmaps",
-    desc: "Fast Scrape.do Maps discovery for local business signals.", csvCols: _SW_COLS },
-  { key: "gsearch", label: "Google Search", endpoint: "/uploads/gsearch",
-    desc: "Search-phase pipeline across Google result strategies.", csvCols: _SW_COLS },
   { key: "relationship", label: "Financial Relationship", endpoint: "/uploads/relationship",
     desc: "Verifies a financial relationship and returns Company Y's website only when confirmed.", csvCols: _REL_COLS },
-  { key: "firmographics", label: "Firmographics", endpoint: "/uploads/firmographics",
-    desc: "Enrichment for rows that already have a website.", csvCols: _FIRMO_COLS },
-];
-
-const PHASES = [
-  { value: "all",      label: "All Phases Combined" },
-  { value: "phase1",   label: "Phase 1: Initial Hook & Punctuation" },
-  { value: "phase2",   label: "Phase 2: AI NL Prompts" },
-  { value: "phase3",   label: "Phase 3: Address Pivot" },
-  { value: "phase4",   label: "Phase 4: Document Hunting" },
-  { value: "phase5",   label: "Phase 5: Dynamic Expansion" },
-  { value: "fallback", label: "Fallback Searches Only" },
 ];
 
 const SAMPLE_COLS = ["company_name", "country", "sno", "company_local_name",
@@ -197,7 +166,7 @@ export function previewCanLaunch(preview, pipeline) {
 }
 
 export async function render(root) {
-  const state = { companyId: "", companyName: "", pipeline: null, phase: "all", file: null, preview: null };
+  const state = { companyId: "", companyName: "", pipeline: null, file: null, preview: null };
   let previewGeneration = 0;
 
   const companySelect = el("select", { id: "new-run-company", class: `${inputCls} w-full` });
@@ -297,24 +266,9 @@ export async function render(root) {
     );
   });
 
-  const phaseSelect = el("select", { id: "new-run-phase", class: `${inputCls} w-full` },
-    ...PHASES.map((p) => el("option", { value: p.value }, p.label)));
-  phaseSelect.addEventListener("change", () => {
-    state.phase = phaseSelect.value;
-    refresh();
-  });
-
-  const phaseRow = el("div", { class: "phase-field divider-top hidden mt-4 pt-4" },
-    el("label", { class: "mb-1.5 block view-kicker", for: "new-run-phase" }, "Search phase"),
-    phaseSelect,
-    el("p", { class: "mt-2 text-xs text-slate-400" },
-      "Only applies to Google Search uploads."),
-  );
-
   const step2 = stepCard(2, "Pipeline",
     el("div", {},
       el("div", { class: "grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3" }, ...pipelineCards),
-      phaseRow,
     ));
 
   const schemaArea = el("div");
@@ -334,16 +288,13 @@ export async function render(root) {
 
     const pipelineKey = pipeline.key;
     previewArea.replaceChildren(el("p", { class: "section-copy" }, "Previewing..."));
-    // Preview with the parser the UPLOAD will use. Relationship (Company_Name_Y /
-    // Company_Name_X / Input_URL) and firmographics (website_url, no company/country
-    // required) have their own header shapes, so they get their own dry-run endpoints;
-    // the shared /uploads/preview runs parse_entities_csv and would report their files
-    // as headerless, positional "col 1 = company, col 2 = country".
+    // Preview with the parser the UPLOAD will use. Relationship has its own header shape
+    // (Company_Name_Y / Company_Name_X / Input_URL), so it gets its own dry-run endpoint;
+    // the shared /uploads/preview runs parse_entities_csv and would report its file as
+    // headerless, positional "col 1 = company, col 2 = country".
     const previewEndpoint = pipeline.ai
       ? "/uploads/preview"
-      : ({ relationship: "/uploads/relationship/preview",
-           firmographics: "/uploads/firmographics/preview" }[pipelineKey]
-         ?? "/uploads/preview");
+      : "/uploads/relationship/preview";
     const requestIsCurrent = () => generation === previewGeneration
       && state.file === file
       && state.pipeline?.key === pipelineKey;
@@ -395,7 +346,6 @@ export async function render(root) {
     fd.append("company_id", state.companyId);
     if (!state.pipeline.ai) fd.append("company_name", state.companyName ?? "");
     if (state.pipeline.ai) fd.append("mode", state.pipeline.key);
-    if (state.pipeline.key === "gsearch") fd.append("phase", state.phase || "all");
     try {
       const info = await api(state.pipeline.endpoint, { method: "POST", body: fd });
       startMsg.replaceChildren(
@@ -415,7 +365,6 @@ export async function render(root) {
 
   const summaryCompany = el("dd", { class: "mt-1 text-sm font-semibold text-slate-50" }, "-");
   const summaryPipeline = el("dd", { class: "mt-1 text-sm font-semibold text-slate-50" }, "-");
-  const summaryPhase = el("dd", { class: "mt-1 text-sm font-semibold text-slate-50" }, "-");
   const summaryFile = el("dd", { class: "mt-1 truncate text-sm font-semibold text-slate-50" }, "-");
   const summaryRows = el("dd", { class: "mt-1 text-sm font-semibold text-slate-50" }, "-");
   const readiness = el("p", { class: "mt-4 text-sm text-slate-400" },
@@ -426,7 +375,6 @@ export async function render(root) {
     el("dl", { class: "launch-list mt-4" },
       summaryItem("Company", summaryCompany),
       summaryItem("Pipeline", summaryPipeline),
-      summaryItem("Phase", summaryPhase),
       summaryItem("Input file", summaryFile),
       summaryItem("Rows", summaryRows),
     ),
@@ -457,18 +405,12 @@ export async function render(root) {
           : step4;
     [step1, step2, step3, step4].forEach((step) => step.setCurrent(step === currentStep));
     startBtn.disabled = !canLaunch;
-    phaseRow.classList.toggle("hidden", state.pipeline?.key !== "gsearch");
     schemaArea.replaceChildren(csvSchemaPanel(state.pipeline));
-    const phaseInfo = state.pipeline?.key === "gsearch" && state.phase && state.phase !== "all"
-      ? ` - ${PHASES.find((p) => p.value === state.phase)?.label ?? state.phase}` : "";
     summary.textContent = canLaunch
-      ? `${state.companyName} / ${state.pipeline.label}${phaseInfo} / ${fmtNum(state.preview.total_rows)} rows`
+      ? `${state.companyName} / ${state.pipeline.label} / ${fmtNum(state.preview.total_rows)} rows`
       : "Complete the steps above to start.";
     summaryCompany.textContent = state.companyName || "-";
     summaryPipeline.textContent = state.pipeline?.label || "-";
-    summaryPhase.textContent = state.pipeline?.key === "gsearch"
-      ? PHASES.find((p) => p.value === state.phase)?.label ?? state.phase
-      : "Default";
     summaryFile.textContent = state.file?.name || "-";
     summaryRows.textContent = state.preview ? fmtNum(state.preview.total_rows) : "-";
     readiness.textContent = canLaunch

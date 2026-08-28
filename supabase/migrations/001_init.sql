@@ -7,7 +7,7 @@ create table companies (
 create table runs (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id),
-  pipeline text not null,        -- gmaps | gsearch | full | firmographics | url_discovery | ai_bulk | ai_deep
+  pipeline text not null,        -- relationship | ai_bulk | ai_deep
   run_ref text not null,         -- on-disk run_id / upload_id
   status text not null,          -- queued | running | completed | completed_with_errors | failed
   total_rows int,

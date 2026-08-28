@@ -21,7 +21,7 @@ def calculate_llm_cost_usd(*, prompt_tokens: int, completion_tokens: int,
                            batch_mode: bool = False) -> float:
     """USD cost of the cleanup LLM from aggregated token counts.
 
-    Gemini only (2026-08-20 — the OpenAI provider is deleted). Mirrors the legacy serpwow
+    Gemini only (2026-08-20 — the OpenAI provider is deleted). Mirrors the relationship
     pricing-env convention: same env names and defaults, and a batch job falls back to the
     sync rates when the batch rates are unset.
     """

@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.serpwow.relationship_csv import (
+from app.services.relationship.relationship_csv import (
     InvalidRelationshipCSV,
     parse_relationship_csv,
 )

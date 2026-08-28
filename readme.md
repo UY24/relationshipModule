@@ -1,48 +1,52 @@
-# website_url_finder
+# relationshipModule
 
-Company-website discovery behind one FastAPI app: cheap **SerpWow pipelines** (gmaps /
-gsearch / firmographics / relationship) plus **AI Mode** (`ai_bulk` / `ai_deep`,
-scrape.do Google AI Mode + LLM cleanup). Company/run tracking lives in Supabase; the UI is
-served at `/app`.
+Two pipelines behind one FastAPI app, both scraping Google through **scrape.do's AI Mode**
+endpoint and reasoning over the answer with **Gemini**:
+
+- **Financial Relationship** (`relationship`) — takes an OCR'd portfolio-page CSV of
+  (investor X, company Y, page URL), verifies the X↔Y financial relationship, and returns
+  Y's website **only when the relationship is confirmed**.
+- **AI Mode** (`ai_bulk`, `ai_deep`) — bulk company-website discovery. `ai_bulk` for broad
+  batches, `ai_deep` for thorough per-entity investigation.
+
+Company/run tracking lives in Supabase; the UI is served at `/app`.
 
 ## Prerequisites
 
 - Python 3.12 (Homebrew python is fine: `brew install python@3.12`)
+- Docker — for RabbitMQ. **Both** pipelines are broker-driven; neither runs without it.
 - A Supabase project (free tier works) for company/run tracking
-- Docker — **only** if you use the SerpWow pipelines (they need RabbitMQ; AI Mode does not)
+- An S3 bucket — required for the relationship pipeline, which keeps no local copy
+- A scrape.do token and a Gemini API key
 
 ## Setup
 
 1. Clone and enter the repo:
 
    ```sh
-   git clone <repo-url> && cd website_url_finder
+   git clone <repo-url> && cd relationshipModule
    ```
 
-2. Create the venv if missing:
+2. Create the venv and install dependencies:
 
    ```sh
    python3.12 -m venv .venv
-   ```
-
-3. Install dependencies:
-
-   ```sh
    .venv/bin/pip install -r backend/requirements.txt
    ```
 
-4. Create your `.env` and fill it in:
+3. Create your `.env`:
 
    ```sh
    cp .env.example .env
    ```
 
-   Fill the **"1. REQUIRED — core"** section (`SCRAPEDO_TOKEN`, `GEMINI_API_KEY` — or an
-   OpenAI key via the AI Mode section — plus `API_PORT` if you want a non-default port)
-   and the **"2. Supabase"** section (next step). Everything else has working defaults.
+   Fill the **"1. REQUIRED — core"** section (`SCRAPEDO_TOKEN`, `GEMINI_API_KEY`, plus
+   `API_PORT` if you want a non-default port) and the **"2. Supabase"** section (next
+   step). Set `S3_BUCKET`/`S3_REGION` in section 4. Everything else has working defaults.
 
-5. Supabase: create a project, open the dashboard **SQL Editor**, run the contents of
-   `supabase/migrations/001_init.sql`, then paste into `.env`:
+4. Supabase: create a project, open the dashboard **SQL Editor**, run the contents of
+   `supabase/migrations/001_init.sql` then `002_add_model_is_batch.sql`, and paste into
+   `.env`:
 
    - `SUPABASE_URL` — the **bare** project URL (`https://<ref>.supabase.co`), **not** the
      postgres `:5432/postgres` connection string
@@ -62,18 +66,26 @@ served at `/app`.
 
 ## Run locally
 
-You run two things in **separate terminals**: the **app** (always), and the **SerpWow
-worker** (only if you use the SerpWow pipelines — AI Mode needs no worker).
+Three things, in this order.
+
+**RabbitMQ** (the bundled compose file provides `rabbitmq:3.13-management`; user/pass
+default to `guest`/`guest` unless set in `.env`):
+
+```sh
+docker compose up -d rabbitmq
+```
+
+Management UI at `http://localhost:15672`.
 
 **Terminal 1 — the app (dev, auto-reload):**
 
 ```sh
-.venv/bin/ uvicorn run:app --reload --host 127.0.0.1 --port 8080
+.venv/bin/uvicorn run:app --reload --host 127.0.0.1 --port 8080
 ```
 
-Then open `http://localhost:8080/app` (port = `API_PORT` in `.env`). The server hot-reloads
-on code changes. `run:app` is intentional — uvicorn needs the `module:asgi_app` import
-string (`run.py` exposes `app`); plain `uvicorn run --reload` won't work.
+Then open `http://localhost:8080/app` (port = `API_PORT` in `.env`). `run:app` is
+intentional — uvicorn needs the `module:asgi_app` import string (`run.py` exposes `app`);
+plain `uvicorn run --reload` won't work.
 
 No-reload alternatives (same app):
 
@@ -82,43 +94,38 @@ No-reload alternatives (same app):
 cd backend && ../.venv/bin/python -m app.main    # or run the module directly
 ```
 
-**Terminal 2 — the SerpWow worker (SerpWow pipelines only):** AI Mode runs entirely
-in-process and needs neither RabbitMQ nor a worker. For the SerpWow pipelines
-(firmographics / gmaps / gsearch / relationship), first start RabbitMQ (the bundled
-compose file provides a `rabbitmq:3.13-management` container; user/pass default to
-`guest`/`guest` unless set in `.env`):
-
-```sh
-docker compose up -d rabbitmq
-```
-
-then start the worker in the second terminal:
+**Terminal 2 — the worker.** Required for both pipelines; uploads sit `queued` without it.
+Run exactly **one** worker process.
 
 ```sh
 .venv/bin/python worker.py        # from repo root (resolves into backend/app)
 ```
 
-RabbitMQ management UI: `http://localhost:15672`. Uploads sit `queued` until the worker is
-running.
-
 ## Tests
 
 ```sh
-cd backend && ../.venv/bin/python -m unittest discover -s tests
+cd backend && ../.venv/bin/python -m unittest discover -s tests -t .
+cd backend && for f in tests/*.mjs; do node "$f"; done      # UI DOM contracts
 ```
 
-All offline — no live API calls.
+All offline — no live API calls. The `-t .` matters: it makes the tests import as the
+`tests` package so `tests/__init__.py`'s hermeticity guard (which blanks every credential
+env var) actually runs.
 
 ## Typical workflow
 
-Run the cheap SerpWow pipelines first (`gmaps` / `gsearch` / `full`) — they resolve ~80%
-of companies. Feed the unresolved-residue CSV into AI Mode: `ai_bulk` for broad batches,
-`ai_deep` for thorough per-entity investigation. Uploads show a **preview** step (column
-mapping + row count) before the run starts, and finished runs have a **"Re-run failed
-rows"** button that carries resolved rows over.
+Upload a CSV on the **New Run** page, pick a company and a pipeline, and check the
+**preview** (column mapping + row count) before starting. Sample inputs are in `samples/`.
+
+- Relationship needs `Input_URL`, `Company_Name_X`, `Company_Name_Y`.
+- AI Mode needs a company-name column and a country column.
+
+Finished runs have a **"Rerun failed"** button on the run detail page. For relationship it
+deletes the error markers and re-drives — every row that already has a result is skipped,
+so rows that only need their Gemini verdict redone cost **no scrape.do credits**.
 
 ## More docs
 
-- `CLAUDE.md` — architecture (durable)
-- `HANDOFF.md` — current state: what's done, what's owed, what's blocking 500k
-- `docs/` — SerpWow pipeline internals, configuration reference, API endpoints
+- `CLAUDE.md` — architecture (durable): both engines, the S3 layout, the batch config
+  resolver, and the conventions to follow when changing things.
+- `.env.example` — every environment variable, with what reads it and why.
