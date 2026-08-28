@@ -1,13 +1,12 @@
 """A row that scraped fine but never got an LLM result must be nameable and retryable.
 
-Before this it was neither: it landed in notEnriched.csv reading "No firmographics
-extracted." — byte-identical to a row Google simply had no AI Overview for, which is FINAL
-— was counted in `no_ai_overview` despite HAVING had an overview, never appeared in
-retry.csv, and `retry-failed-rows` reported "Enqueued 0" while correctly redoing it.
+Before this it was neither: it read byte-identical to a row the provider genuinely had
+no answer for, which is FINAL, never appeared in retry.csv, and `retry-failed-rows`
+reported "Enqueued 0" while correctly redoing it.
 """
 import unittest
 
-from app.services.serpwow.reporting import retry_row
+from app.services.relationship.reporting import retry_row
 
 
 class RetryRowLlmIncompleteTests(unittest.TestCase):

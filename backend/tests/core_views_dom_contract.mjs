@@ -148,7 +148,7 @@ async function dashboardContract() {
     ["/companies/runs", { runs: [{
       run_ref: "run id/1?",
       company_id: "co id/&",
-      pipeline: "gmaps",
+      pipeline: "relationship",
       status: "completed",
       total_rows: 0,
       websites_found: 0,
@@ -166,7 +166,7 @@ async function dashboardContract() {
   assert(summary.getAttribute("href") === "#/runs?company_id=co%20id%2F%26", "company summary href is not encoded");
   assert(byClass(summary, "company-outcome-rate")[0]?.textContent.startsWith("—"), "zero outcomes must render an em dash rate");
   assert(!byTag(root, "button").some((button) => hasDescendant(button, "dl")), "a button must not wrap company metrics");
-  const runLink = linkByHref(root, "#/runs/run%20id%2F1%3F?engine=serpwow");
+  const runLink = linkByHref(root, "#/runs/run%20id%2F1%3F?engine=relationship");
   assert(runLink, "dashboard run link is not a real encoded anchor");
   assert(runLink.getAttribute("aria-label")?.includes("Zero Co"), "dashboard run link needs a helpful aria-label");
 }
@@ -197,10 +197,10 @@ async function companiesContract() {
 async function runsContract() {
   responses = new Map([
     ["/companies", { companies: [{ id: "c 1", name: "Acme" }] }],
-    ["/companies/runs?company_id=c+1&pipeline=gmaps", { runs: [{
+    ["/companies/runs?company_id=c+1&pipeline=relationship", { runs: [{
       run_ref: "run /2?",
       company_id: "c 1",
-      pipeline: "gmaps",
+      pipeline: "relationship",
       status: "completed",
       total_rows: 3,
       websites_found: 2,
@@ -210,7 +210,7 @@ async function runsContract() {
     }] }],
   ]);
   const root = new Element("main");
-  await renderRuns(root, { query: { company_id: "c 1", pipeline: "gmaps", status: "completed" } });
+  await renderRuns(root, { query: { company_id: "c 1", pipeline: "relationship", status: "completed" } });
 
   for (const id of ["runs-company-filter", "runs-pipeline-filter", "runs-status-filter"]) {
     assert(byAttribute(root, "id", id)[0]?.tagName === "SELECT", `${id} select missing`);
@@ -220,16 +220,16 @@ async function runsContract() {
     "runs-company-filter", "runs-pipeline-filter", "runs-status-filter",
   ].map((id) => byAttribute(root, "id", id)[0]);
   assert(companySelect.value === "c 1", "company filter did not hydrate from query");
-  assert(pipelineSelect.value === "gmaps", "pipeline filter did not hydrate from query");
+  assert(pipelineSelect.value === "relationship", "pipeline filter did not hydrate from query");
   assert(statusSelect.value === "completed", "status filter did not hydrate from query");
   assert(linkByHref(root, "#/runs")?.textContent === "Clear", "Clear anchor missing");
-  const runLink = linkByHref(root, "#/runs/run%20%2F2%3F?engine=serpwow");
+  const runLink = linkByHref(root, "#/runs/run%20%2F2%3F?engine=relationship");
   assert(runLink, "runs table link is not a real encoded anchor");
   assert(runLink.getAttribute("aria-label")?.includes("Acme"), "runs table link needs a helpful aria-label");
 
   byTag(root, "button").find((button) => button.textContent === "Apply").click();
   assert(
-    window.location.hash === "#/runs?company_id=c+1&pipeline=gmaps&status=completed",
+    window.location.hash === "#/runs?company_id=c+1&pipeline=relationship&status=completed",
     "Apply did not preserve URL-backed company, pipeline, and status filters",
   );
 }

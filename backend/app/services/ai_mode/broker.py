@@ -1,10 +1,10 @@
 # backend/app/services/ai_mode/broker.py
 """AI Mode's RabbitMQ layer: own channel + durable queue on the shared connection.
 
-The SerpWow engine owns the connection (``engine.init_rabbitmq``) and passes it
+``app/engine.py`` owns the connection (``init_rabbitmq``) and passes it
 to ``init_ai_mode_broker``. AI Mode gets its OWN channel because aio_pika QoS is
 per-channel — scrape.do concurrency (default 20, up to ~200) must not share
-SerpWow's prefetch (default 4). The queue is bound to the same direct exchange
+the relationship prefetch. The queue is bound to the same direct exchange
 under its own routing key, so the management UI shows both systems side by side.
 
 Import direction: engine -> ai_mode.broker (never the reverse).
@@ -47,7 +47,7 @@ def worker_concurrency() -> int:
 
     Falls back to the shared ``WORKER_CONCURRENCY`` so a deployment that wants one
     number only sets that one; ``AI_MODE_WORKER_CONCURRENCY`` exists for when AI Mode
-    needs to differ (its messages are batches lasting ~50s, vs a gmaps row at ~3.5s).
+    needs to differ (its messages are batches lasting ~50s, vs a whole relationship run).
     Neither of these is a provider cap — concurrent scrape.do calls are bounded
     centrally by ``SCRAPEDO_CONCURRENCY`` (common.provider_limits), so raising these
     cannot breach the account limit.

@@ -755,38 +755,11 @@ tbody tr:hover {
   text-underline-offset: 0.2em;
 }
 
-/* Operations and interactive tools */
-.operations-view,
-.tools-view {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1.75rem;
-}
-
-.operations-section,
-.tool-category,
-.tool-section {
-  min-width: 0;
-}
-
-.operations-feedback:not(.hidden) {
-  margin-bottom: 1rem;
-}
-
-.operations-table {
-  min-width: 78rem;
-}
-
 .action-group {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-}
-
-.operations-actions {
-  flex-wrap: nowrap;
 }
 
 .retry-control-group {
@@ -828,27 +801,6 @@ tbody tr:hover {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 0.2em;
-}
-
-.tool-category {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.tool-section-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.tool-section {
-  background: var(--panel-soft);
-}
-
-.tool-section > .section-heading,
-.tool-section > .detail-section-body {
-  padding-inline: 1rem;
 }
 
 .tool-form,
@@ -1793,12 +1745,6 @@ tbody tr:hover {
 
   .tool-actions > :only-child {
     grid-column: 1 / -1;
-  }
-
-  .operations-actions .btn-ghost,
-  .operations-actions .btn-warning,
-  .operations-actions .btn-danger {
-    width: auto;
   }
 
   .filter-toolbar {

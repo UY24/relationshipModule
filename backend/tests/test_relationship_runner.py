@@ -11,9 +11,9 @@ from app.services import ai_mode as ai_mode_pkg
 # needs the submodule attribute to exist, and only an import sets it.
 from app.services.ai_mode import gemini_batch as _gemini_batch  # noqa: F401
 from app.services.common import llm_batch
-from app.services.serpwow import relationship_runner as runner
-from app.services.serpwow import s3_run_driver as driver
-from app.services.serpwow import s3_run_store as store
+from app.services.relationship import relationship_runner as runner
+from app.services.relationship import s3_run_driver as driver
+from app.services.relationship import s3_run_store as store
 from tests.test_s3_run_store import FakeS3, _patched
 
 CSV = (b"Input_URL,Company_Name_X,Company_Name_Y,country\n"
@@ -1202,8 +1202,8 @@ class BatchReattachTests(unittest.TestCase):
             out = runner._run_gemini_batch(PREFIX, [("0", {}), ("1", {})])
         self.assertEqual(set(out), {"0", "1"})
 
-    def test_the_shared_gsearch_timeout_key_is_not_what_bounds_a_shard(self) -> None:
-        """.env sets GEMINI_BATCH_TIMEOUT_SEC=1800 for gsearch's per-row batches. Reading
+    def test_a_short_configured_timeout_is_not_what_bounds_a_shard(self) -> None:
+        """An .env that sets GEMINI_BATCH_TIMEOUT_SEC low for other work. Reading
         it here abandoned every relationship shard after 30 minutes."""
         with mock.patch.dict(os.environ, {"GEMINI_BATCH_TIMEOUT_SEC": "1800"},
                              clear=False):

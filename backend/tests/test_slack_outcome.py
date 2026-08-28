@@ -16,15 +16,15 @@ class TestSlackOutcome(unittest.TestCase):
 
         with patch.object(notify, "_post", side_effect=fake_post), \
              patch.object(notify, "is_configured", return_value=True):
-            notify.notify_run_complete(pipeline="gsearch", company="C", run_ref="r",
+            notify.notify_run_complete(pipeline="relationship", company="C", run_ref="r",
                                        status="completed_with_errors", found=2, not_found=1,
-                                       errored=2, error_sources={"serpwow": 2})
+                                       errored=2, error_sources={"scrapedo": 2})
 
         blob = str(captured["blocks"])
         self.assertIn("found", blob.lower())
         self.assertIn("not found", blob.lower())
         self.assertIn("errored", blob.lower())
-        self.assertIn("serpwow", blob.lower())
+        self.assertIn("scrapedo", blob.lower())
         # fallback: "2 found / 1 not found / 2 errored"
         self.assertIn("2 errored", captured["fallback"])
         self.assertIn("2 found", captured["fallback"])
@@ -40,17 +40,17 @@ class TestSlackOutcome(unittest.TestCase):
 
         with patch.object(notify, "_post", side_effect=fake_post), \
              patch.object(notify, "is_configured", return_value=True):
-            notify.notify_run_complete(pipeline="gsearch", company="C", run_ref="r",
+            notify.notify_run_complete(pipeline="relationship", company="C", run_ref="r",
                                        status="completed_with_errors", found=1, not_found=0,
-                                       errored=3, error_sources={"gemini": 1, "serpwow": 2})
+                                       errored=3, error_sources={"gemini": 1, "scrapedo": 2})
 
-        # Find the Errors field text and confirm serpwow (higher count) is listed first.
+        # Find the Errors field text and confirm scrapedo (higher count) is listed first.
         errors_field = next(f for f in captured["blocks"][3]["fields"] if "Errors" in f["text"])
-        serpwow_idx = errors_field["text"].find("serpwow")
+        scrapedo_idx = errors_field["text"].find("scrapedo")
         gemini_idx = errors_field["text"].find("gemini")
-        self.assertNotEqual(serpwow_idx, -1)
+        self.assertNotEqual(scrapedo_idx, -1)
         self.assertNotEqual(gemini_idx, -1)
-        self.assertLess(serpwow_idx, gemini_idx)
+        self.assertLess(scrapedo_idx, gemini_idx)
 
     def test_no_errored_keeps_two_line_outcome(self):
         captured = {}
@@ -62,13 +62,13 @@ class TestSlackOutcome(unittest.TestCase):
 
         with patch.object(notify, "_post", side_effect=fake_post), \
              patch.object(notify, "is_configured", return_value=True):
-            notify.notify_run_complete(pipeline="gsearch", company="C", run_ref="r",
+            notify.notify_run_complete(pipeline="relationship", company="C", run_ref="r",
                                        status="completed", found=2, not_found=1)
 
         blob = str(captured["blocks"])
         self.assertNotIn("errored", blob.lower())
         self.assertNotIn("Errors", str(captured["blocks"]))
-        self.assertEqual(captured["fallback"], "Completed: gsearch · C · 2 found / 1 not found")
+        self.assertEqual(captured["fallback"], "Completed: relationship · C · 2 found / 1 not found")
 
 
 if __name__ == "__main__":
